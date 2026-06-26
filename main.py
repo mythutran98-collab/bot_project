@@ -132,4 +132,134 @@ class CreateKeyModal(Modal, title="Tạo Key"):
             embed.add_field(name="👤 UID", value=f"`{uid_value}`" if uid_value else "`Chưa gán`", inline=True)
             embed.add_field(name="💻 HWID", value="`Chưa gán`", inline=True)
             embed.set_footer(
-                text=f"Tạo bởi {interacti
+                text=f"Tạo bởi {interaction.user}", 
+                icon_url=interaction.user.avatar.url if interaction.user.avatar else None
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            print("❌ Lỗi CreateKey:", e)
+            await interaction.response.send_message("⚠️ Lỗi tạo key!", ephemeral=True)
+
+# -------- MENU SELECT --------
+class MenuSelect(Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Redeem Key", emoji="🔑"),
+            discord.SelectOption(label="Reset HWID", emoji="♻️"),
+            discord.SelectOption(label="Tạo Key (Admin)", emoji="🛠️"),
+            discord.SelectOption(label="Check Key", emoji="🔍"),
+            discord.SelectOption(label="Get Script", emoji="📜"),
+            discord.SelectOption(label="Danh sách Key (Admin)", emoji="📂")
+        ]
+        super().__init__(placeholder="📌 Chọn chức năng...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            choice = self.values[0]
+            user_id = str(interaction.user.id)
+            db = load_db()
+            keys = db["keys"]
+
+            if choice == "Redeem Key":
+                return await interaction.response.send_modal(RedeemModal())
+
+            elif choice == "Reset HWID":
+                for k, v in keys.items():
+                    if v["uid"] == user_id:
+                        v["hwid"] = None
+                        save_db(db)
+                        embed = discord.Embed(
+                            title="♻️ Reset HWID",
+                            description=f"✅ HWID của key `{k}` đã reset!",
+                            color=discord.Color.orange()
+                        )
+                        return await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.response.send_message("❌ Bạn chưa có key!", ephemeral=True)
+
+            elif choice == "Tạo Key (Admin)":
+                if interaction.user.id not in ADMINS:
+                    return await interaction.response.send_message("❌ Bạn không có quyền!", ephemeral=True)
+                return await interaction.response.send_modal(CreateKeyModal())
+
+            elif choice == "Check Key":
+                for k, v in keys.items():
+                    if v["uid"] == user_id:
+                        embed = discord.Embed(
+                            title="🔍 Thông tin Key",
+                            description=f"🔑 `{k}`\n💻 HWID: `{v['hwid']}`",
+                            color=discord.Color.purple()
+                        )
+                        return await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.response.send_message("❌ Bạn chưa redeem key!", ephemeral=True)
+
+            elif choice == "Get Script":
+                for k, v in keys.items():
+                    if v["uid"] == user_id:
+                        script = f'''```lua
+getgenv().Key = "{k}"
+getgenv().ID = "{user_id}"
+loadstring(game:HttpGet("https://raw.githubusercontent.com/chaudzvn123/dangcap/refs/heads/main/hub"))()
+```'''
+                        try:
+                            await interaction.user.send(f"✅ Script của bạn:\n{script}")
+                            return await interaction.response.send_message("📩 Script đã gửi vào DM!", ephemeral=True)
+                        except:
+                            return await interaction.response.send_message("❌ Không gửi được DM, bật tin nhắn riêng!", ephemeral=True)
+                await interaction.response.send_message("❌ Bạn chưa redeem key!", ephemeral=True)
+
+            elif choice == "Danh sách Key (Admin)":
+                if interaction.user.id not in ADMINS:
+                    return await interaction.response.send_message("❌ Bạn không có quyền!", ephemeral=True)
+
+                if not keys:
+                    return await interaction.response.send_message("⚠️ Chưa có key nào!", ephemeral=True)
+
+                msg = "📜 **Danh sách key:**\n"
+                for k, v in keys.items():
+                    msg += f"- `{k}` | UID: `{v['uid']}` | HWID: `{v['hwid']}`\n"
+
+                if len(msg) > 1900:
+                    with open("keys_list.txt", "w", encoding="utf-8") as f:
+                        f.write(msg)
+                    await interaction.response.send_message(
+                        "📂 Danh sách key dài, xuất file:",
+                        file=discord.File("keys_list.txt"),
+                        ephemeral=True
+                    )
+                else:
+                    embed = discord.Embed(
+                        title="📂 Danh sách Key",
+                        description=msg,
+                        color=discord.Color.teal()
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except Exception as e:
+            print("❌ Lỗi MenuSelect:", e)
+            traceback.print_exc()
+            await interaction.response.send_message("⚠️ Lỗi xử lý menu!", ephemeral=True)
+
+class MenuView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(MenuSelect())
+
+# -------- LỆNH HIỆN MENU --------
+@bot.command()
+async def menu(ctx):
+    embed = discord.Embed(
+        title="📌 MENU QUẢN LÝ KEY",
+        description="Chọn chức năng bên dưới để sử dụng bot",
+        color=discord.Color.gold()
+    )
+    embed.set_thumbnail(url=ctx.author.avatar.url if ctx.author.avatar else None)
+    embed.set_footer(text="Bot Key System by You")
+
+    await ctx.send(embed=embed, view=MenuView())
+
+# ================== CHẠY BOT & FLASK ==================
+if __name__ == "__main__":
+    threading.Thread(target=run_flask).start()
+    bot.run(TOKEN)
