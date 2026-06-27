@@ -11,7 +11,7 @@ from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
-TOKEN = os.environ.get("DISCORD_TOKEN") or "MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM"
+TOKEN = os.environ.get("MTQwODE3MDk5MDkzNjI2MDY4MA.G8gyDe.f-hZnNdAx1vkx-aXV9y4QzfBMKjWok-OPl7j0w")
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 ROLE_REDEEM_ID = 1520074181620797591                 # Role ID tự động cấp khi Redeem thành công
 DATA_FILE = "key.json"
