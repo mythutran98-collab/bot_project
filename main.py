@@ -17,7 +17,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
-DATA_FILE = "keys.json"
+DATA_FILE = "key.json"
 SECRET_SALT = "DANG_CAP_KEY_SYSTEM_SALT_2026"       # Phải trùng khớp 100% với Script Roblox
 
 # ================== FLASK API (ANTI-BYPASS ENGINE) ==================
