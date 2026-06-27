@@ -11,7 +11,6 @@ from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
-# Đã thay thế dòng nạp Token trực tiếp từ .env thành chuỗi cứng cố định
 TOKEN = "MTQwODE3MDk5MDkzNjI2MDY4MA.GMup_A.K9SZuoyWeCy-obgdiMNC-OnMMgFoUiPHkKG4x0"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 DATA_FILE = "key.json"
@@ -217,7 +216,7 @@ class MenuSelect(Select):
             elif choice == "Get Script":
                 for k, v in keys.items():
                     if v["uid"] == user_id:
-                        # Đã dọn dẹp định dạng text thuần túy không bị dính ngoặc Markdown lỗi khi nạp executor
+                        # Đã sửa sạch link text thuần túy không lỗi cú pháp loadstring
                         script = f'''```lua
 getgenv().Key = "{k}"
 getgenv().ID = "{user_id}"
