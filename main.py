@@ -328,7 +328,7 @@ class MenuSelect(Select):
                     if v.get("uid") and str(v["uid"]).strip() == user_id:
                         found_key = True
                         # Đã sửa lại cú pháp gán biến chuỗi script chuẩn hóa, loại bỏ lỗi thụt dòng lề
-                        script_code = f'_G.Key = "{k}"\n_G.DiscordID = "{user_id}"\nloadstring(game:HttpGet("raw.githubusercontent.com/mythutran98-collab/bot_project/refs/heads/main/VND.txt"))()'
+                        script_code = f'_G.Key = "{k}"\n_G.DiscordID = "{user_id}"\nloadstring(game:HttpGet("https://raw.githubusercontent.com/mythutran98-collab/bot_project/refs/heads/main/VND.txt"))()'
                         try:
                             await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n```lua\n{script_code}\n```")
                             return await interaction.response.send_message("📩 Script đã gửi riêng vào tin nhắn riêng (DM) của bạn!", ephemeral=True)
