@@ -315,7 +315,7 @@ class MenuSelect(Select):
                 for k, v in keys.items():
                     if v.get("uid") and str(v["uid"]).strip() == user_id:
                         found_key = True
-                        script = f'```lua\ngetgenv().Key = "{k}"\ngetgenv().ID = "{user_id}"\nloadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt](https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()\n```'
+                        script = f'```lua\ngetgenv().Key = "{k}"\ngetgenv().ID = "{user_id}"\nloadstring(game:HttpGet("(https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()"))()\n```'
                         try:
                             await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n{script}")
                             return await interaction.response.send_message("📩 Script đã gửi riêng vào tin nhắn riêng (DM) của bạn!", ephemeral=True)
