@@ -11,7 +11,8 @@ from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
-TOKEN = "MTQwODE3MDk5MDkzNjI2MDY4MA.GMup_A.K9SZuoyWeCy-obgdiMNC-OnMMgFoUiPHkKG4x0"
+# Đọc trực tiếp từ biến môi trường Termux hoặc dán cứng Token mới của bạn vào đây
+TOKEN = os.environ.get("MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM") or "MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 DATA_FILE = "key.json"
 SECRET_SALT = "DANG_CAP_KEY_SYSTEM_SALT_2026"       # Phải trùng khớp 100% với Script Roblox
@@ -42,20 +43,20 @@ def check_key():
             k = db["keys"][key]
             
             # Kiểm tra xem Key có thuộc về User ID Discord này không (Đã Redeem chưa)
-            if k["uid"] != user_id:
+            if str(k["uid"]) != str(user_id):
                 return jsonify({"status": "fail", "msg": "Key này không thuộc về tài khoản Discord của bạn!"})
 
             # Xử lý gán và kiểm tra HWID thiết bị
-            if k["hwid"] is None:
+            if k["hwid"] is None or k["hwid"] == "":
                 k["hwid"] = hwid
                 save_db(db)
                 msg = "Key hợp lệ & HWID thiết bị đã được liên kết thành công!"
-            elif k["hwid"] == hwid:
+            elif str(k["hwid"]) == str(hwid):
                 msg = "Xác thực thành công!"
             else:
                 return jsonify({"status": "fail", "msg": "Mã phần cứng (HWID) không trùng khớp! Vui lòng Reset HWID trên Discord."})
 
-            # [QUAN TRỌNG] Tạo chữ ký Token SHA256 để chống can thiệp mạng/Bypass dữ liệu giống hệt Luau
+            # [ANTI-BYPASS HIGH ENGINE] Tạo chữ ký Token SHA256 bảo mật chống can thiệp mạng chặn gói tin
             raw_string = f"{key}{user_id}{hwid}{SECRET_SALT}"
             server_token = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
 
@@ -92,9 +93,12 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=",", intents=intents)
 
-# -------- CÁC LỚP MODAL TƯƠNG TÁC (UI) --------
-class RedeemModal(Modal, title="Kích hoạt (Redeem) Key"):
-    key_input = TextInput(label="Nhập mã Key của bạn", style=discord.TextStyle.short, placeholder="Ví dụ: AbC123XyZ...")
+# -------- CÁC LỚP MODAL TƯƠNG TÁC (ĐÃ FIX LIÊN TỤC PERSISTENT) --------
+class RedeemModal(Modal):
+    def __init__(self):
+        super().__init__(title="Kích hoạt (Redeem) Key", custom_id="persistent_redeem_modal")
+        self.key_input = TextInput(label="Nhập mã Key của bạn", style=discord.TextStyle.short, placeholder="Ví dụ: AbC123XyZ...", custom_id="input_redeem_key")
+        self.add_item(self.key_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -104,7 +108,7 @@ class RedeemModal(Modal, title="Kích hoạt (Redeem) Key"):
             if key_value in db["keys"]:
                 k = db["keys"][key_value]
 
-                if k["uid"] is None:
+                if k["uid"] is None or k["uid"] == "":
                     k["uid"] = str(interaction.user.id)
                     save_db(db)
 
@@ -117,7 +121,7 @@ class RedeemModal(Modal, title="Kích hoạt (Redeem) Key"):
                         embed.set_thumbnail(url=interaction.user.avatar.url)
                     return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-                elif k["uid"] == str(interaction.user.id):
+                elif str(k["uid"]) == str(interaction.user.id):
                     return await interaction.response.send_message("ℹ️ Bạn đã sở hữu và kích hoạt Key này từ trước rồi!", ephemeral=True)
                 else:
                     return await interaction.response.send_message("❌ Key này đã được người khác sử dụng trước đó!", ephemeral=True)
@@ -127,9 +131,13 @@ class RedeemModal(Modal, title="Kích hoạt (Redeem) Key"):
             print("❌ Lỗi Redeem:", e)
             await interaction.response.send_message("⚠️ Có lỗi xảy ra trong quá trình kích hoạt mã!", ephemeral=True)
 
-class CreateKeyModal(Modal, title="Tạo Key Mới (Admin Only)"):
-    key_input = TextInput(label="Nhập Key mong muốn (để trống để Random)", required=False)
-    uid_input = TextInput(label="Gán sẵn Discord UID (để trống nếu tự kích hoạt)", required=False)
+class CreateKeyModal(Modal):
+    def __init__(self):
+        super().__init__(title="Tạo Key Mới (Admin Only)", custom_id="persistent_create_modal")
+        self.key_input = TextInput(label="Nhập Key mong muốn (để trống để Random)", required=False, custom_id="input_create_key")
+        self.uid_input = TextInput(label="Gán sẵn Discord UID (để trống nếu tự kích hoạt)", required=False, custom_id="input_create_uid")
+        self.add_item(self.key_input)
+        self.add_item(self.uid_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -166,7 +174,7 @@ class CreateKeyModal(Modal, title="Tạo Key Mới (Admin Only)"):
             print("❌ Lỗi CreateKey:", e)
             await interaction.response.send_message("⚠️ Gặp lỗi bất ngờ khi hệ thống tạo key!", ephemeral=True)
 
-# -------- MENU CHỌN TÙY CHỌN (SELECT MENU) --------
+# -------- MENU CHỌN TÙY CHỌN (SELECT MENU - FIXED CUSTOM_ID) --------
 class MenuSelect(Select):
     def __init__(self):
         options = [
@@ -177,7 +185,7 @@ class MenuSelect(Select):
             discord.SelectOption(label="Tạo Key (Admin)", emoji="🛠️", description="Lệnh tạo mã Key mới"),
             discord.SelectOption(label="Danh sách Key (Admin)", emoji="📂", description="Xuất toàn bộ cơ sở dữ liệu")
         ]
-        super().__init__(placeholder="📌 Vui lòng lựa chọn tác vụ hệ thống...", options=options)
+        super().__init__(placeholder="📌 Vui lòng lựa chọn tác vụ hệ thống...", options=options, custom_id="persistent_menu_select")
 
     async def callback(self, interaction: discord.Interaction):
         try:
@@ -191,7 +199,7 @@ class MenuSelect(Select):
 
             elif choice == "Reset HWID":
                 for k, v in keys.items():
-                    if v["uid"] == user_id:
+                    if str(v["uid"]) == user_id:
                         v["hwid"] = None
                         save_db(db)
                         embed = discord.Embed(
@@ -204,7 +212,7 @@ class MenuSelect(Select):
 
             elif choice == "Check Key":
                 for k, v in keys.items():
-                    if v["uid"] == user_id:
+                    if str(v["uid"]) == user_id:
                         embed = discord.Embed(
                             title="🔍 Dữ Liệu Tra Cứu Key",
                             description=f"🔑 **Key:** `{k}`\n💻 **HWID Khóa Máy:** `{v['hwid'] or 'Chưa khóa thiết bị nào'}`",
@@ -215,8 +223,7 @@ class MenuSelect(Select):
 
             elif choice == "Get Script":
                 for k, v in keys.items():
-                    if v["uid"] == user_id:
-                        # Đã sửa sạch link text thuần túy không lỗi cú pháp loadstring
+                    if str(v["uid"]) == user_id:
                         script = f'''```lua
 getgenv().Key = "{k}"
 getgenv().ID = "{user_id}"
@@ -264,7 +271,7 @@ loadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/b
 
 class MenuView(View):
     def __init__(self):
-        super().__init__(timeout=None) # Cấu hình để nút bấm không bao giờ hết hạn (Persistent View)
+        super().__init__(timeout=None) # Persistent View không bao giờ timeout
         self.add_item(MenuSelect())
 
 # -------- CÁC SỰ KIỆN & LỆNH ĐIỀU KHIỂN --------
@@ -288,8 +295,8 @@ async def menu(ctx):
 
 # ================== KHỞI CHẠY KHÔNG GIAN ĐA LUỒNG ==================
 if __name__ == "__main__":
-    if not TOKEN:
-        print("❌ LỖI NGHIÊM TRỌNG: Biến TOKEN đang trống!")
+    if not TOKEN or "DÁN_TOKEN" in TOKEN:
+        print("❌ LỖI NGHIÊM TRỌNG: Biến TOKEN đang trống hoặc chưa được thay thế chuỗi chuẩn!")
     else:
         threading.Thread(target=run_flask, daemon=True).start()
         bot.run(TOKEN)
