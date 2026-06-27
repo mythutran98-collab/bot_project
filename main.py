@@ -9,13 +9,10 @@ import discord
 from discord.ext import commands
 from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
-from dotenv import load_dotenv
-
-# Tải cấu hình từ file .env
-load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
+# Đã thay thế dòng nạp Token trực tiếp từ .env thành chuỗi cứng cố định
+TOKEN = "MTQwODE3ODQ1NTM3OTU3NDc5NA.G6dykK.HRgRREc5CIumwB7lPvumwB4x5JvVWo70-5CC_c"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 DATA_FILE = "key.json"
 SECRET_SALT = "DANG_CAP_KEY_SYSTEM_SALT_2026"       # Phải trùng khớp 100% với Script Roblox
@@ -220,10 +217,11 @@ class MenuSelect(Select):
             elif choice == "Get Script":
                 for k, v in keys.items():
                     if v["uid"] == user_id:
+                        # Đã dọn dẹp định dạng text thuần túy không bị dính ngoặc Markdown lỗi khi nạp executor
                         script = f'''```lua
 getgenv().Key = "{k}"
 getgenv().ID = "{user_id}"
-loadstring(game:HttpGet("[https://github.com/mythutran98-collab/bot_project/blob/main/VND.txt](https://github.com/mythutran98-collab/bot_project/blob/main/VND.txt)"))()
+loadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt](https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()
 ```'''
                         try:
                             await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n{script}")
@@ -274,7 +272,6 @@ class MenuView(View):
 @bot.event
 async def on_ready():
     print(f"🤖 Đăng nhập thành công bot: {bot.user.name}")
-    # Đăng ký View chạy ngầm liên tục ngay cả khi bot restart
     bot.add_view(MenuView())
 
 @bot.command()
@@ -293,7 +290,7 @@ async def menu(ctx):
 # ================== KHỞI CHẠY KHÔNG GIAN ĐA LUỒNG ==================
 if __name__ == "__main__":
     if not TOKEN:
-        print("❌ LỖI NGHIÊM TRỌNG: Không thấy token DISCORD_TOKEN trong file .env hoặc biến môi trường!")
+        print("❌ LỖI NGHIÊM TRỌNG: Biến TOKEN đang trống!")
     else:
         threading.Thread(target=run_flask, daemon=True).start()
         bot.run(TOKEN)
