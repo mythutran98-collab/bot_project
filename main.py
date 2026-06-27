@@ -4,6 +4,8 @@ import random
 import string
 import hashlib
 import threading
+import time
+import datetime
 import traceback
 import discord
 from discord.ext import commands
@@ -11,11 +13,28 @@ from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
-TOKEN = os.environ.get("MTQwODE3MDk5MDkzNjI2MDY4MA.G8gyDe.f-hZnNdAx1vkx-aXV9y4QzfBMKjWok-OPl7j0w")
+TOKEN = "MTQwODE3MDk5MDkzNjI2MDY4MA.G8gyDe.f-hZnNdAx1vkx-aXV9y4QzfBMKjWok-OPl7j0w"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 ROLE_REDEEM_ID = 1520074181620797591                 # Role ID tự động cấp khi Redeem thành công
 DATA_FILE = "key.json"
 SECRET_SALT = "DANG_CAP_KEY_SYSTEM_SALT_2026"       # Phải trùng khớp 100% với Script Roblox
+
+# ================== QUẢN LÝ CƠ SỞ DỮ LIỆU ==================
+def load_db():
+    if not os.path.exists(DATA_FILE):
+        return {"keys": {}}
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"keys": {}}
+
+def save_db(db):
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print("❌ Lỗi ghi File DB:", e)
 
 # ================== FLASK API (ANTI-BYPASS ENGINE) ==================
 app = Flask(__name__)
@@ -43,20 +62,20 @@ def check_key():
             k = db["keys"][key]
             
             # Kiểm tra xem Key có thuộc về User ID Discord này không (Đã Redeem chưa)
-            if str(k["uid"]) != str(user_id):
+            if not k.get("uid") or str(k["uid"]) != str(user_id):
                 return jsonify({"status": "fail", "msg": "Key này không thuộc về tài khoản Discord của bạn!"})
 
             # Xử lý gán và kiểm tra HWID thiết bị
-            if k["hwid"] is None or k["hwid"] == "":
+            if k.get("hwid") is None or k["hwid"] == "":
                 k["hwid"] = hwid
                 save_db(db)
                 msg = "Key hợp lệ & HWID thiết bị đã được liên kết thành công!"
             elif str(k["hwid"]) == str(hwid):
                 msg = "Xác thực thành công!"
             else:
-                return jsonify({"status": "fail", "msg": "Mã phần cứng (HWID) không trùng khớp! Vui lòng Reset HWID trên Discord."})
+                return jsonify({"status": "fail", "msg": "Mã phần cứng (HWID) không khớp! Vui lòng Reset HWID trên Discord."})
 
-            # [ANTI-BYPASS HIGH ENGINE] Tạo chữ ký Token SHA256 bảo mật chống can thiệp mạng chặn gói tin
+            # [ANTI-BYPASS HIGH ENGINE] Tạo chữ ký Token SHA256 bảo mật chống can thiệp mạng
             raw_string = f"{key}{user_id}{hwid}{SECRET_SALT}"
             server_token = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
 
@@ -74,24 +93,10 @@ def check_key():
 def run_flask():
     app.run(host="0.0.0.0", port=8080)
 
-# ================== QUẢN LÝ CƠ SỞ DỮ LIỆU ==================
-def load_db():
-    if not os.path.exists(DATA_FILE):
-        return {"keys": {}}
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {"keys": {}}
-
-def save_db(db):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=4, ensure_ascii=False)
-
 # ================== DISCORD BOT ENGINE ==================
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True # BẮT BUỘC BẬT TÍNH NĂNG NÀY TRÊN DEVELOPER PORTAL ĐỂ CẤP ĐƯỢC ROLE
+intents.members = True 
 bot = commands.Bot(command_prefix=",", intents=intents)
 
 # -------- CÁC LỚP MODAL TƯƠNG TÁC --------
@@ -110,11 +115,11 @@ class RedeemModal(Modal):
                 k = db["keys"][key_value]
 
                 # Trường hợp 1: Key chưa ai sử dụng -> Tiến hành kích hoạt
-                if k["uid"] is None or k["uid"] == "":
+                if k.get("uid") is None or k["uid"] == "":
                     k["uid"] = str(interaction.user.id)
+                    k["last_reset"] = 0 # Khởi tạo mốc thời gian reset hwid
                     save_db(db)
 
-                    # Tiến hành tự động trao Role cho người dùng
                     role_msg = ""
                     try:
                         role = interaction.guild.get_role(ROLE_REDEEM_ID)
@@ -122,15 +127,15 @@ class RedeemModal(Modal):
                             await interaction.user.add_roles(role)
                             role_msg = f"\n🎁 Bạn đã được tự động cấp role: {role.mention}!"
                         else:
-                            role_msg = "\n⚠️ Không tìm thấy Role cấp trên Server. Vui lòng báo Admin kiểm tra ID Role."
+                            role_msg = "\n⚠️ Không tìm thấy Role cấp trên Server."
                     except discord.Forbidden:
-                        role_msg = "\n⚠️ Bot không có quyền cấp Role! Hãy kéo Role của Bot lên cao hơn Role cần cấp."
+                        role_msg = "\n⚠️ Bot không có quyền cấp Role! Hãy xếp Role của Bot cao hơn."
                     except Exception as e:
                         role_msg = f"\n⚠️ Gặp lỗi khi cấp Role: {str(e)}"
 
                     embed = discord.Embed(
                         title="✅ Kích Hoạt Thành Công!",
-                        description=f"🔑 Key: `{key_value}` hiện tại đã được liên kết vào tài khoản Discord của bạn.{role_msg}",
+                        description=f"🔑 Key: `{key_value}` hiện tại đã được liên kết vào tài khoản của bạn.{role_msg}",
                         color=discord.Color.green()
                     )
                     if interaction.user.avatar:
@@ -139,21 +144,20 @@ class RedeemModal(Modal):
 
                 # Trường hợp 2: Key đã kích hoạt bởi chính user đó
                 elif str(k["uid"]) == str(interaction.user.id):
-                    # Đề phòng user đã kích hoạt nhưng bị mất role (ví dụ: out server vào lại), cấp lại role luôn
                     try:
                         role = interaction.guild.get_role(ROLE_REDEEM_ID)
                         if role and role not in interaction.user.roles:
                             await interaction.user.add_roles(role)
-                            return await interaction.response.send_message(f"ℹ️ Bạn đã sở hữu Key này rồi! Hệ thống đã cấp lại Role {role.mention} cho bạn.", ephemeral=True)
+                            return await interaction.response.send_message(f"ℹ️ Bạn đã sở hữu Key này rồi! Hệ thống đã cấp lại Role {role.mention}.", ephemeral=True)
                     except Exception:
                         pass
                     return await interaction.response.send_message("ℹ️ Bạn đã sở hữu và kích hoạt Key này từ trước rồi!", ephemeral=True)
                 
-                # Trường hợp 3: Key bị trùng với người khác
+                # Trường hợp 3: Key đã bị người khác sử dụng
                 else:
-                    return await interaction.response.send_message("❌ Key này đã được người khác sử dụng trước đó!", ephemeral=True)
+                    return await interaction.response.send_message("❌ Key này đã được một tài khoản Discord khác sử dụng trước đó!", ephemeral=True)
             else:
-                await interaction.response.send_message("❌ Mã Key không tồn tại hệ thống hoặc không chính xác!", ephemeral=True)
+                await interaction.response.send_message("❌ Mã Key không tồn tại trên hệ thống!", ephemeral=True)
         except Exception as e:
             print("❌ Lỗi Redeem:", e)
             await interaction.response.send_message("⚠️ Có lỗi xảy ra trong quá trình kích hoạt mã!", ephemeral=True)
@@ -180,10 +184,11 @@ class CreateKeyModal(Modal):
                 uid_value = None
 
             db = load_db()
+            # Kiểm tra trùng key
             if key_value in db["keys"]:
-                return await interaction.response.send_message("⚠️ Mã Key này đã trùng lặp và tồn tại trên cơ sở dữ liệu!", ephemeral=True)
+                return await interaction.response.send_message(f"⚠️ Thao tác thất bại: Mã Key `{key_value}` đã tồn tại trên hệ thống!", ephemeral=True)
 
-            db["keys"][key_value] = {"uid": uid_value, "hwid": None}
+            db["keys"][key_value] = {"uid": uid_value, "hwid": None, "last_reset": 0}
             save_db(db)
 
             embed = discord.Embed(
@@ -206,7 +211,7 @@ class MenuSelect(Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="Redeem Key", emoji="🔑", description="Kích hoạt liên kết Key vào tài khoản"),
-            discord.SelectOption(label="Reset HWID", emoji="♻️", description="Xóa liên kết mã thiết bị cũ"),
+            discord.SelectOption(label="Reset HWID", emoji="♻️", description="Xóa liên kết mã thiết bị cũ (1 ngày/lần)"),
             discord.SelectOption(label="Check Key", emoji="🔍", description="Xem thông tin Key của bản thân"),
             discord.SelectOption(label="Get Script", emoji="📜", description="Lấy đoạn mã nạp Executor"),
             discord.SelectOption(label="Tạo Key (Admin)", emoji="🛠️", description="Lệnh tạo mã Key mới"),
@@ -225,55 +230,66 @@ class MenuSelect(Select):
                 return await interaction.response.send_modal(RedeemModal())
 
             elif choice == "Reset HWID":
+                current_time = int(time.time())
                 for k, v in keys.items():
-                    if str(v["uid"]) == user_id:
+                    if str(v.get("uid")) == user_id:
+                        last_reset = v.get("last_reset", 0)
+                        
+                        # GIỚI HẠN 24 GIỜ (86400 giây)
+                        time_passed = current_time - last_reset
+                        if time_passed < 86400:
+                            time_left = 86400 - time_passed
+                            readable_time = str(datetime.timedelta(seconds=time_left)).split(".")[0]
+                            return await interaction.response.send_message(f"❌ Bạn đã Reset HWID trước đó rồi. Vui lòng đợi thêm `{readable_time}` để thực hiện lại tác vụ này!", ephemeral=True)
+                        
                         v["hwid"] = None
+                        v["last_reset"] = current_time
                         save_db(db)
                         embed = discord.Embed(
                             title="♻️ Reset HWID Hoàn Tất",
-                            description=f"✅ Mã khóa phần cứng cũ của Key `{k}` đã được gỡ bỏ thành công. Bây giờ bạn có thể mở game trên thiết bị mới!",
+                            description=f"✅ Mã khóa phần cứng cũ của Key `{k}` đã được gỡ bỏ. Bạn có thể mở game trên thiết bị mới ngay bây giờ!",
                             color=discord.Color.orange()
                         )
                         return await interaction.response.send_message(embed=embed, ephemeral=True)
-                await interaction.response.send_message("❌ Lỗi: Bạn chưa sở hữu hay kích hoạt bất kỳ mã Key nào để Reset!", ephemeral=True)
+                await interaction.response.send_message("❌ Lỗi: Bạn chưa sở hữu hay kích hoạt bất kỳ mã Key nào để có thể thực hiện!", ephemeral=True)
 
             elif choice == "Check Key":
                 for k, v in keys.items():
-                    if str(v["uid"]) == user_id:
+                    if str(v.get("uid")) == user_id:
                         embed = discord.Embed(
                             title="🔍 Dữ Liệu Tra Cứu Key",
-                            description=f"🔑 **Key:** `{k}`\n💻 **HWID Khóa Máy:** `{v['hwid'] or 'Chưa khóa thiết bị nào'}`",
+                            description=f"🔑 **Key:** `{k}`\n💻 **HWID Khóa Máy:** `{v.get('hwid') or 'Chưa khóa thiết bị nào'}`",
                             color=discord.Color.purple()
                         )
                         return await interaction.response.send_message(embed=embed, ephemeral=True)
-                await interaction.response.send_message("❌ Hệ thống tìm kiếm không thấy dữ liệu Key của bạn!", ephemeral=True)
+                await interaction.response.send_message("❌ Hệ thống không tìm thấy dữ liệu Key gắn với tài khoản của bạn!", ephemeral=True)
 
             elif choice == "Get Script":
                 for k, v in keys.items():
-                    if str(v["uid"]) == user_id:
-                        script = f'```lua\ngetgenv().Key = "{k}"\ngetgenv().ID = "{user_id}"\nloadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt](https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()\n```'
+                    if str(v.get("uid")) == user_id:
+                        script = f'```lua\ngetgenv().Key = "{k}"\ngetgenv().ID = "{user_id}"\nloadstring(game:HttpGet("https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt"))()\n```'
                         try:
                             await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n{script}")
                             return await interaction.response.send_message("📩 Script đã gửi riêng vào tin nhắn riêng (DM) của bạn!", ephemeral=True)
                         except Exception:
-                            return await interaction.response.send_message("❌ Không thể gửi tin nhắn riêng cho bạn! Hãy mở khóa tính năng nhận tin nhắn từ người lạ ở cài đặt bảo mật Discord.", ephemeral=True)
+                            return await interaction.response.send_message("❌ Không thể gửi DM! Hãy mở cài đặt bảo mật cho phép nhận tin nhắn từ thành viên cùng server.", ephemeral=True)
                 await interaction.response.send_message("❌ Bạn không thể lấy script khi chưa kích hoạt kích hoạt (Redeem) Key!", ephemeral=True)
 
             elif choice == "Tạo Key (Admin)":
                 if interaction.user.id not in ADMINS:
-                    return await interaction.response.send_message("❌ Bạn không có quyền quản trị cấp cao để thực hiện!", ephemeral=True)
+                    return await interaction.response.send_message("❌ Bạn không có quyền quản trị để thực hiện!", ephemeral=True)
                 return await interaction.response.send_modal(CreateKeyModal())
 
             elif choice == "Danh sách Key (Admin)":
                 if interaction.user.id not in ADMINS:
-                    return await interaction.response.send_message("❌ Bạn không có quyền quản trị cấp cao để thực hiện!", ephemeral=True)
+                    return await interaction.response.send_message("❌ Bạn không có quyền quản trị để thực hiện!", ephemeral=True)
 
                 if not keys:
-                    return await interaction.response.send_message("⚠️ Hệ thống hiện đang rỗng dữ liệu, chưa có key nào được tạo!", ephemeral=True)
+                    return await interaction.response.send_message("⚠️ Cơ sở dữ liệu đang trống!", ephemeral=True)
 
                 msg = "📂 **DANH SÁCH TOÀN BỘ KEY HỆ THỐNG:**\n"
                 for k, v in keys.items():
-                    msg += f"• Key: `{k}` | UID: `{v['uid']}` | HWID: `{v['hwid']}`\n"
+                    msg += f"• Key: `{k}` | UID: `{v.get('uid')}` | HWID: `{v.get('hwid')}`\n"
 
                 if len(msg) > 1900:
                     with open("keys_list.txt", "w", encoding="utf-8") as f:
@@ -318,8 +334,8 @@ async def menu(ctx):
 
 # ================== KHỞI CHẠY KHÔNG GIAN ĐA LUỒNG ==================
 if __name__ == "__main__":
-    if not TOKEN or "DÁN_TOKEN" in TOKEN:
-        print("❌ LỖI NGHIÊM TRỌNG: Biến TOKEN đang trống hoặc chưa được thay thế chuỗi chuẩn!")
+    if not TOKEN or TOKEN == "":
+        print("❌ LỖI NGHIÊM TRỌNG: Biến TOKEN đang trống!")
     else:
         threading.Thread(target=run_flask, daemon=True).start()
         bot.run(TOKEN)
