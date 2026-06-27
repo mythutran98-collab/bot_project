@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
 # Đã thay thế dòng nạp Token trực tiếp từ .env thành chuỗi cứng cố định
-TOKEN = "MTQwODE3ODQ1NTM3OTU3NDc5NA.G6dykK.HRgRREc5CIumwB7lPvumwB4x5JvVWo70-5CC_c"
+TOKEN = "MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 DATA_FILE = "key.json"
 SECRET_SALT = "DANG_CAP_KEY_SYSTEM_SALT_2026"       # Phải trùng khớp 100% với Script Roblox
