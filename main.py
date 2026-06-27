@@ -223,7 +223,7 @@ class MenuSelect(Select):
                         script = f'''```lua
 getgenv().Key = "{k}"
 getgenv().ID = "{user_id}"
-loadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/bot_project/refs/heads/main/baochau.txt](https://raw.githubusercontent.com/mythutran98-collab/bot_project/refs/heads/main/baochau.txt)"))()
+loadstring(game:HttpGet("[https://github.com/mythutran98-collab/bot_project/blob/main/VND.txt](https://github.com/mythutran98-collab/bot_project/blob/main/VND.txt)"))()
 ```'''
                         try:
                             await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n{script}")
