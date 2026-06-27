@@ -11,8 +11,9 @@ from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
-TOKEN = os.environ.get("MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM") or "MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM"
+TOKEN = os.environ.get("DISCORD_TOKEN") or "MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
+ROLE_REDEEM_ID = 1520074181620797591                 # Role ID tự động cấp khi Redeem thành công
 DATA_FILE = "key.json"
 SECRET_SALT = "DANG_CAP_KEY_SYSTEM_SALT_2026"       # Phải trùng khớp 100% với Script Roblox
 
@@ -90,9 +91,10 @@ def save_db(db):
 # ================== DISCORD BOT ENGINE ==================
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True # BẮT BUỘC BẬT TÍNH NĂNG NÀY TRÊN DEVELOPER PORTAL ĐỂ CẤP ĐƯỢC ROLE
 bot = commands.Bot(command_prefix=",", intents=intents)
 
-# -------- CÁC LỚP MODAL TƯƠNG TÁC (FIXED FIXED) --------
+# -------- CÁC LỚP MODAL TƯƠNG TÁC --------
 class RedeemModal(Modal):
     def __init__(self):
         super().__init__(title="Kích hoạt (Redeem) Key", custom_id="persistent_redeem_modal")
@@ -107,21 +109,47 @@ class RedeemModal(Modal):
             if key_value in db["keys"]:
                 k = db["keys"][key_value]
 
+                # Trường hợp 1: Key chưa ai sử dụng -> Tiến hành kích hoạt
                 if k["uid"] is None or k["uid"] == "":
                     k["uid"] = str(interaction.user.id)
                     save_db(db)
 
+                    # Tiến hành tự động trao Role cho người dùng
+                    role_msg = ""
+                    try:
+                        role = interaction.guild.get_role(ROLE_REDEEM_ID)
+                        if role:
+                            await interaction.user.add_roles(role)
+                            role_msg = f"\n🎁 Bạn đã được tự động cấp role: {role.mention}!"
+                        else:
+                            role_msg = "\n⚠️ Không tìm thấy Role cấp trên Server. Vui lòng báo Admin kiểm tra ID Role."
+                    except discord.Forbidden:
+                        role_msg = "\n⚠️ Bot không có quyền cấp Role! Hãy kéo Role của Bot lên cao hơn Role cần cấp."
+                    except Exception as e:
+                        role_msg = f"\n⚠️ Gặp lỗi khi cấp Role: {str(e)}"
+
                     embed = discord.Embed(
                         title="✅ Kích Hoạt Thành Công!",
-                        description=f"🔑 Key: `{key_value}` hiện tại đã được trói vào tài khoản Discord của bạn.",
+                        description=f"🔑 Key: `{key_value}` hiện tại đã được liên kết vào tài khoản Discord của bạn.{role_msg}",
                         color=discord.Color.green()
                     )
                     if interaction.user.avatar:
                         embed.set_thumbnail(url=interaction.user.avatar.url)
                     return await interaction.response.send_message(embed=embed, ephemeral=True)
 
+                # Trường hợp 2: Key đã kích hoạt bởi chính user đó
                 elif str(k["uid"]) == str(interaction.user.id):
+                    # Đề phòng user đã kích hoạt nhưng bị mất role (ví dụ: out server vào lại), cấp lại role luôn
+                    try:
+                        role = interaction.guild.get_role(ROLE_REDEEM_ID)
+                        if role and role not in interaction.user.roles:
+                            await interaction.user.add_roles(role)
+                            return await interaction.response.send_message(f"ℹ️ Bạn đã sở hữu Key này rồi! Hệ thống đã cấp lại Role {role.mention} cho bạn.", ephemeral=True)
+                    except Exception:
+                        pass
                     return await interaction.response.send_message("ℹ️ Bạn đã sở hữu và kích hoạt Key này từ trước rồi!", ephemeral=True)
+                
+                # Trường hợp 3: Key bị trùng với người khác
                 else:
                     return await interaction.response.send_message("❌ Key này đã được người khác sử dụng trước đó!", ephemeral=True)
             else:
@@ -135,8 +163,6 @@ class CreateKeyModal(Modal):
         super().__init__(title="Tạo Key Mới (Admin Only)", custom_id="persistent_create_modal")
         self.key_input = TextInput(label="Nhập Key mong muốn (để trống để Random)", required=False, custom_id="input_create_key", placeholder="Để trống nếu muốn tự tạo ngẫu nhiên...")
         self.uid_input = TextInput(label="Gán sẵn Discord UID (để trống tự liên kết)", required=False, custom_id="input_create_uid", placeholder="Nhập ID người nhận nếu có...")
-        
-        # ĐÃ THÊM: Nạp trực tiếp các item vào giao diện để tránh lỗi sập hiển thị
         self.add_item(self.key_input)
         self.add_item(self.uid_input)
 
@@ -225,12 +251,7 @@ class MenuSelect(Select):
             elif choice == "Get Script":
                 for k, v in keys.items():
                     if str(v["uid"]) == user_id:
-                        # Đã sửa sạch link raw dạng chuỗi chuẩn cho Executor nhận dạng
-                        script = f'''```lua
-getgenv().Key = "{k}"
-getgenv().ID = "{user_id}"
-loadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt](https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()
-```'''
+                        script = f'```lua\ngetgenv().Key = "{k}"\ngetgenv().ID = "{user_id}"\nloadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt](https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()\n```'
                         try:
                             await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n{script}")
                             return await interaction.response.send_message("📩 Script đã gửi riêng vào tin nhắn riêng (DM) của bạn!", ephemeral=True)
