@@ -11,7 +11,6 @@ from discord.ui import View, Select, Modal, TextInput
 from flask import Flask, request, jsonify
 
 # ================== CẤU HÌNH HỆ THỐNG ==================
-# Đọc trực tiếp từ biến môi trường Termux hoặc dán cứng Token mới của bạn vào đây
 TOKEN = os.environ.get("MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM") or "MTQwODE3MDk5MDkzNjI2MDY4MA.GZ66Ou.5BaiB7QdvS91UU-WbQz45fWyTVvert2sRTB3QM"
 ADMINS = [1265245644558176278, 1312771393766690836] # Discord UID của Admin
 DATA_FILE = "key.json"
@@ -93,7 +92,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix=",", intents=intents)
 
-# -------- CÁC LỚP MODAL TƯƠNG TÁC (ĐÃ FIX LIÊN TỤC PERSISTENT) --------
+# -------- CÁC LỚP MODAL TƯƠNG TÁC (FIXED FIXED) --------
 class RedeemModal(Modal):
     def __init__(self):
         super().__init__(title="Kích hoạt (Redeem) Key", custom_id="persistent_redeem_modal")
@@ -134,8 +133,10 @@ class RedeemModal(Modal):
 class CreateKeyModal(Modal):
     def __init__(self):
         super().__init__(title="Tạo Key Mới (Admin Only)", custom_id="persistent_create_modal")
-        self.key_input = TextInput(label="Nhập Key mong muốn (để trống để Random)", required=False, custom_id="input_create_key")
-        self.uid_input = TextInput(label="Gán sẵn Discord UID (để trống nếu tự kích hoạt)", required=False, custom_id="input_create_uid")
+        self.key_input = TextInput(label="Nhập Key mong muốn (để trống để Random)", required=False, custom_id="input_create_key", placeholder="Để trống nếu muốn tự tạo ngẫu nhiên...")
+        self.uid_input = TextInput(label="Gán sẵn Discord UID (để trống tự liên kết)", required=False, custom_id="input_create_uid", placeholder="Nhập ID người nhận nếu có...")
+        
+        # ĐÃ THÊM: Nạp trực tiếp các item vào giao diện để tránh lỗi sập hiển thị
         self.add_item(self.key_input)
         self.add_item(self.uid_input)
 
@@ -174,7 +175,7 @@ class CreateKeyModal(Modal):
             print("❌ Lỗi CreateKey:", e)
             await interaction.response.send_message("⚠️ Gặp lỗi bất ngờ khi hệ thống tạo key!", ephemeral=True)
 
-# -------- MENU CHỌN TÙY CHỌN (SELECT MENU - FIXED CUSTOM_ID) --------
+# -------- MENU CHỌN TÙY CHỌN (SELECT MENU) --------
 class MenuSelect(Select):
     def __init__(self):
         options = [
@@ -224,6 +225,7 @@ class MenuSelect(Select):
             elif choice == "Get Script":
                 for k, v in keys.items():
                     if str(v["uid"]) == user_id:
+                        # Đã sửa sạch link raw dạng chuỗi chuẩn cho Executor nhận dạng
                         script = f'''```lua
 getgenv().Key = "{k}"
 getgenv().ID = "{user_id}"
@@ -271,7 +273,7 @@ loadstring(game:HttpGet("[https://raw.githubusercontent.com/mythutran98-collab/b
 
 class MenuView(View):
     def __init__(self):
-        super().__init__(timeout=None) # Persistent View không bao giờ timeout
+        super().__init__(timeout=None)
         self.add_item(MenuSelect())
 
 # -------- CÁC SỰ KIỆN & LỆNH ĐIỀU KHIỂN --------
