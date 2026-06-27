@@ -118,54 +118,67 @@ class RedeemModal(Modal):
         try:
             db = load_db()
             key_value = self.key_input.value.strip()
+            user_id = str(interaction.user.id).strip()
 
-            if key_value in db["keys"]:
-                k = db["keys"][key_value]
+            # 1. Kiểm tra xem Key nhập vào có tồn tại hay không trước
+            if key_value not in db["keys"]:
+                return await interaction.response.send_message("❌ Mã Key không tồn tại trên hệ thống!", ephemeral=True)
 
-                # Trường hợp 1: Key chưa ai sử dụng -> Tiến hành kích hoạt
-                if k.get("uid") is None or str(k["uid"]).strip() == "":
-                    k["uid"] = str(interaction.user.id)
-                    k["last_reset"] = 0
-                    save_db(db)
+            k = db["keys"][key_value]
 
-                    role_msg = ""
-                    try:
-                        role = interaction.guild.get_role(ROLE_REDEEM_ID)
-                        if role:
-                            await interaction.user.add_roles(role)
-                            role_msg = f"\n🎁 Bạn đã được tự động cấp role: {role.mention}!"
-                        else:
-                            role_msg = "\n⚠️ Không tìm thấy Role cấp trên Server."
-                    except discord.Forbidden:
-                        role_msg = "\n⚠️ Bot không có quyền cấp Role! Hãy xếp Role của Bot cao hơn."
-                    except Exception as e:
-                        role_msg = f"\n⚠️ Gặp lỗi khi cấp Role: {str(e)}"
+            # Trường hợp: Key này đã được kích hoạt bởi chính người dùng này từ trước
+            if str(k.get("uid")).strip() == user_id:
+                try:
+                    role = interaction.guild.get_role(ROLE_REDEEM_ID)
+                    if role and role not in interaction.user.roles:
+                        await interaction.user.add_roles(role)
+                        return await interaction.response.send_message(f"ℹ️ Bạn đã sở hữu Key này rồi! Hệ thống đã cấp lại Role {role.mention}.", ephemeral=True)
+                except Exception:
+                    pass
+                return await interaction.response.send_message(f"ℹ️ Bạn đã sở hữu và kích hoạt Key này (`{key_value}`) từ trước rồi!", ephemeral=True)
 
-                    embed = discord.Embed(
-                        title="✅ Kích Hoạt Thành Công!",
-                        description=f"🔑 Key: `{key_value}` hiện tại đã được liên kết vào tài khoản của bạn.{role_msg}",
-                        color=discord.Color.green()
+            # Trường hợp: Key đã bị một người KHÁC sở hữu hoàn toàn
+            if k.get("uid") is not None and str(k["uid"]).strip() != "":
+                return await interaction.response.send_message("❌ Key này đã được một tài khoản Discord khác sử dụng trước đó!", ephemeral=True)
+
+            # 2. KHÓA CHẶN FIX 1 NGƯỜI SỞ HỮU 2 KEY
+            # Quét toàn bộ cơ sở dữ liệu xem user hiện tại đã đứng tên bất kỳ một Key nào khác chưa
+            for exist_key, exist_val in db["keys"].items():
+                if exist_val.get("uid") and str(exist_val["uid"]).strip() == user_id:
+                    # Chặn đứng hành động: Bảo toàn trạng thái Key cũ và không động chạm gì vào Key mới nhập vào
+                    return await interaction.response.send_message(
+                        f"❌ **Thao tác thất bại:** Bạn đã kích hoạt và sở hữu một key khác trước đó rồi (`{exist_key}`)! "
+                        f"Mỗi tài khoản chỉ được sử dụng tối đa 1 key hệ thống. Mã bạn vừa nhập vẫn còn nguyên giá trị sử dụng.", 
+                        ephemeral=True
                     )
-                    if interaction.user.avatar:
-                        embed.set_thumbnail(url=interaction.user.avatar.url)
-                    return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-                # Trường hợp 2: Key đã kích hoạt bởi chính user đó
-                elif str(k["uid"]).strip() == str(interaction.user.id):
-                    try:
-                        role = interaction.guild.get_role(ROLE_REDEEM_ID)
-                        if role and role not in interaction.user.roles:
-                            await interaction.user.add_roles(role)
-                            return await interaction.response.send_message(f"ℹ️ Bạn đã sở hữu Key này rồi! Hệ thống đã cấp lại Role {role.mention}.", ephemeral=True)
-                    except Exception:
-                        pass
-                    return await interaction.response.send_message("ℹ️ Bạn đã sở hữu và kích hoạt Key này từ trước rồi!", ephemeral=True)
-                
-                # Trường hợp 3: Key đã bị người khác sử dụng
+            # 3. Tiến hành liên kết Key nếu vượt qua bộ lọc check trùng sở hữu
+            k["uid"] = user_id
+            k["last_reset"] = 0
+            save_db(db)
+
+            role_msg = ""
+            try:
+                role = interaction.guild.get_role(ROLE_REDEEM_ID)
+                if role:
+                    await interaction.user.add_roles(role)
+                    role_msg = f"\n🎁 Bạn đã được tự động cấp role: {role.mention}!"
                 else:
-                    return await interaction.response.send_message("❌ Key này đã được một tài khoản Discord khác sử dụng trước đó!", ephemeral=True)
-            else:
-                await interaction.response.send_message("❌ Mã Key không tồn tại trên hệ thống!", ephemeral=True)
+                    role_msg = "\n⚠️ Không tìm thấy Role cấp trên Server."
+            except discord.Forbidden:
+                role_msg = "\n⚠️ Bot không có quyền cấp Role! Hãy xếp Role của Bot cao hơn."
+            except Exception as e:
+                role_msg = f"\n⚠️ Gặp lỗi khi cấp Role: {str(e)}"
+
+            embed = discord.Embed(
+                title="✅ Kích Hoạt Thành Công!",
+                description=f"🔑 Key: `{key_value}` hiện tại đã được liên kết vào tài khoản của bạn.{role_msg}",
+                color=discord.Color.green()
+            )
+            if interaction.user.avatar:
+                embed.set_thumbnail(url=interaction.user.avatar.url)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
+
         except Exception as e:
             print("❌ Lỗi Redeem:", e)
             await interaction.response.send_message("⚠️ Có lỗi xảy ra trong quá trình kích hoạt mã!", ephemeral=True)
@@ -298,7 +311,6 @@ class MenuSelect(Select):
             elif choice == "Check Key":
                 found_key = False
                 for k, v in keys.items():
-                    # Đã fix lỗi so khớp chuỗi chuẩn xác không lo lệch kiểu dữ liệu int/str
                     if v.get("uid") and str(v["uid"]).strip() == user_id:
                         found_key = True
                         embed = discord.Embed(
@@ -315,14 +327,15 @@ class MenuSelect(Select):
                 for k, v in keys.items():
                     if v.get("uid") and str(v["uid"]).strip() == user_id:
                         found_key = True
-                        script = f'```lua\ngetgenv().Key = "{k}"\ngetgenv().ID = "{user_id}"\nloadstring(game:HttpGet("(https://raw.githubusercontent.com/mythutran98-collab/bot_project/main/VND.txt)"))()"))()\n```'
+                        # Đã sửa lại cú pháp gán biến chuỗi script chuẩn hóa, loại bỏ lỗi thụt dòng lề
+                        script_code = f'_G.Key = "{k}"\n_G.DiscordID = "{user_id}"\nloadstring(game:HttpGet("http://127.0.0.1:8080/check_key"))()'
                         try:
-                            await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n{script}")
+                            await interaction.user.send(f"🤖 **Đoạn mã chạy script dành riêng cho bạn:**\n```lua\n{script_code}\n```")
                             return await interaction.response.send_message("📩 Script đã gửi riêng vào tin nhắn riêng (DM) của bạn!", ephemeral=True)
-                        except Exception:
+                        except discord.Forbidden:
                             return await interaction.response.send_message("❌ Không thể gửi DM! Hãy mở cài đặt bảo mật cho phép nhận tin nhắn từ thành viên cùng server.", ephemeral=True)
                 if not found_key:
-                    await interaction.response.send_message("❌ Bạn không thể lấy script khi chưa kích hoạt kích hoạt (Redeem) Key!", ephemeral=True)
+                    await interaction.response.send_message("❌ Bạn không thể lấy script khi chưa kích hoạt (Redeem) Key!", ephemeral=True)
 
             elif choice == "Tạo Key (Admin)":
                 if interaction.user.id not in ADMINS:
